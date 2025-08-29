@@ -37,7 +37,7 @@ pnpm run dev
 
 - Click the extension icon to open the side bar.
 - Enter a task in the textarea and click "Run". The active tab's page title will be updated.
-- Use the options page (three dots on the extension card → Details → Extension options) to set/copy your API key.
+- Use the options page (three dots on the extension card → Details → Extension options) to set/copy your OpenAI API key. The organization has to be verified, since this extension uses the gpt-5-mini model.
 
 ### Development Notes
 
