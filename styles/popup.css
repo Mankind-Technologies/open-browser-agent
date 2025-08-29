@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@source "./**/*.css";
+@source "../public/**/*.html";
+@source "../src/**/*.{svelte,ts,tsx,js,jsx}";
+
+/* Popup-specific base tweaks if needed */

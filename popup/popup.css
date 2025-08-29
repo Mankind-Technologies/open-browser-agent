@@ -1,0 +1,22 @@
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
+.container { width: 360px; height: 100vh; box-sizing: border-box; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.chat-layout .header { display: flex; flex-direction: column; gap: 6px; }
+.chat-layout h1 { margin: 0; font-size: 16px; }
+.bound-tab { display: flex; align-items: center; gap: 8px; }
+.bound-tab img { border-radius: 3px; border: 1px solid #ddd; display: none; }
+.status { color: #555; }
+
+.conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.history { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.history-header { display: flex; align-items: center; justify-content: space-between; }
+.history-list { flex: 1; min-height: 0; overflow: auto; border: 1px solid #ddd; padding: 8px; background: #fff; }
+.clear-btn { padding: 4px 8px; }
+
+.output label { display: block; font-weight: 600; margin-bottom: 4px; }
+.output pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; border: 1px solid #eee; padding: 8px; background: #fafafa; max-height: 140px; overflow: auto; }
+
+.composer { display: flex; gap: 8px; align-items: flex-end; }
+.composer textarea { flex: 1; width: 100%; box-sizing: border-box; }
+.composer-actions { display: flex; flex-direction: row; gap: 8px; align-items: center; }
+#spinner { display: none; }
+
