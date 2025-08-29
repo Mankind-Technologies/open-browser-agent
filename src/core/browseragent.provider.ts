@@ -4,68 +4,92 @@ export type ElementBriefing = {
     isVisible: boolean;
     position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
 }
-export type ClickElementWithTextOutput = {
-    clicked: true;
+
+export type BaseOutputAction = {
+    success: boolean;
+    whatChangedOnScreen: string;
+}
+
+export type ClickElementWithTextOutput = BaseOutputAction & {
+    success: true;
     urlChanged: false;
 } | {
-    clicked: true;
+    success: true;
     urlChanged: true;
     newUrl: string;
 } | {
-    clicked: false;
+    success: false;
     reason: "not found";
 } | {
-    clicked: false;
+    success: false;
     reason: "multiple found";
     foundElements: ElementBriefing[];
 }
 
-export type TypeInElementOutput = {
-    typed: true;
+export type TypeInElementOutput = BaseOutputAction & {
+    success: true;
 } | {
-    typed: false;
+    success: false;
     reason: "not found";
 } | {
-    typed: false;
+    success: false;
     reason: "multiple found";
     foundElements: ElementBriefing[];
 } | {
-    typed: false;
+    success: false;
     reason: "not editable";
 };
 
-export type GoBackOutput = {
-    wentBack: true;
+export type GoBackOutput = BaseOutputAction & {
+    success: true;
     newUrl: string;
 } | {
-    wentBack: false;
+    success: false;
 };
 
-export type ScrollOutput = {
-    scrolled: true;
+export type ScrollOutput = BaseOutputAction & {
+    success: true;
     direction: 'up' | 'down';
+
 } | {
-    scrolled: false;
+    success: false;
     reason: "already at the top" | "already at the bottom";
+};
+
+export type OpenUrlOutput = BaseOutputAction & {
+    success: true;
+    newUrl: string;
+} | {
+    success: false;
+    reason: "invalid url";
+};
+
+export type ClickElementOutput = BaseOutputAction & {
+    success: true;
+} | {
+    success: false;
+    reason: "not found";
+} | {
+    success: false;
+    reason: "multiple found";
+    foundElements: ElementBriefing[];
+};
+
+export type TypeInFocusedElementOutput = BaseOutputAction & {
+    success: true;
 };
 
 export interface BrowserAgentProvider {
     /**
-     * @returns the screenshot of the current page in base64
-     */
-    takeScreenshot(): Promise<string>;
-    /**
      * @param selector - the selector of the element to click
      * @returns true if the element was found and clicked, false otherwise
      */
-    clickElement(selector: string): Promise<boolean>;
-
+    clickElement(selector: string): Promise<ClickElementOutput>;
     /**
      * @param text - the text to type in
      * @returns true if the element was found and typed in, false otherwise
      */
-    typeInFocusedElement(text: string): Promise<boolean>;
-
+    typeInFocusedElement(text: string): Promise<TypeInFocusedElementOutput>;
     /**
      * @param selector - the selector of the element to type in
      * @param text - the text to type in
@@ -74,21 +98,10 @@ export interface BrowserAgentProvider {
     typeInElement(selector: string, text: string): Promise<TypeInElementOutput>;
 
     /**
-     * @param text - the text to find in the page
-     * @returns the selectors of the elements found
-     */
-    findElementsWithText(text: string): Promise<ElementBriefing[]>;
-
-    /**
      * @param selector - the selector of the element to click
      * @returns true if the element was found and clicked, false otherwise
      */
     clickElementWithText(text: string): Promise<ClickElementWithTextOutput>;
-
-    /**
-     * @returns the current url of the page
-     */
-    getCurrentUrl(): Promise<string>;
 
     /**
      * @returns true if the browser went back, false otherwise
@@ -105,5 +118,21 @@ export interface BrowserAgentProvider {
      * @param url - the url to open
      * @returns true if the url was opened, false otherwise
      */
-    openUrl(url: string): Promise<boolean>;
+    openUrl(url: string): Promise<OpenUrlOutput>;
+
+
+    /**
+     * @returns the screenshot of the current page in base64
+     */
+    takeScreenshot(): Promise<string>;
+    /**
+     * @param text - the text to find in the page
+     * @returns the selectors of the elements found
+     */
+    findElementsWithText(text: string): Promise<ElementBriefing[]>;
+
+    /**
+     * @returns the current url of the page
+     */
+    getCurrentUrl(): Promise<string>;
 }

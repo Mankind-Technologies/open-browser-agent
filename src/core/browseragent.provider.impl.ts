@@ -1,4 +1,5 @@
-import { BrowserAgentProvider, ClickElementWithTextOutput, ElementBriefing, TypeInElementOutput, GoBackOutput, ScrollOutput } from './browseragent.provider';
+import { BrowserAgentProvider, ClickElementWithTextOutput, ElementBriefing, TypeInElementOutput, GoBackOutput, ScrollOutput, ClickElementOutput, TypeInFocusedElementOutput, OpenUrlOutput } from './browseragent.provider';
+import { interpretImageDiff } from './aiFunctions';
 /** No longer use active tab — we bind to a specific tabId per session. */
 
 /**
@@ -85,9 +86,14 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
    *    correctly accounting for nested iframes and visual viewport offsets.
    * 2) In the extension: perform a trusted click at those coordinates using CDP (`chrome.debugger`).
    */
-  async clickElement(selector: string): Promise<boolean> {
+  async clickElement(selector: string): Promise<ClickElementOutput> {
+    const before = await this.takeScreenshot();
     const tabId = this.tabId;
-    if (tabId == null) return false;
+    if (tabId == null) {
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      return { success: false, reason: 'not found', whatChangedOnScreen } as ClickElementOutput;
+    }
     const [injection] = await chrome.scripting.executeScript({
       target: { tabId },
       func: (sel: string) => {
@@ -130,7 +136,11 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
       args: [selector],
     });
     const result = (injection as any)?.result as ({ ok: false } | { ok: true; x: number; y: number }) | undefined;
-    if (!result || !('ok' in result) || !result.ok) return false;
+    if (!result || !('ok' in result) || !result.ok) {
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      return { success: false, reason: 'not found', whatChangedOnScreen } as ClickElementOutput;
+    }
 
     // Perform a trusted, user-like click via CDP (chrome.debugger) from the background.
     const target = { tabId } as const;
@@ -167,21 +177,27 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
     } finally {
       try { await chrome.debugger.detach(target); } catch (_) { /* ignore */ }
     }
-    return true;
+    const after = await this.takeScreenshot();
+    const whatChangedOnScreen = await interpretImageDiff(before, after);
+    return { success: true, whatChangedOnScreen } as ClickElementOutput;
   }
 
   /**
    * Set the value of the currently focused input/textarea/contenteditable element.
    * Now implemented via CDP keystrokes for a trusted, user-like input.
   */
-  async typeInFocusedElement(text: string): Promise<boolean> {
+  async typeInFocusedElement(text: string): Promise<TypeInFocusedElementOutput> {
+    const before = await this.takeScreenshot();
     // Build a simple key sequence that types the provided text (mapping \n to Enter)
     const sequence: Array<{ text?: string; key?: string }> = [];
     for (const ch of String(text ?? '')) {
       if (ch === '\n') sequence.push({ key: 'Enter' });
       else sequence.push({ text: ch });
     }
-    return await this.dispatchTyping(sequence, { delayMean: 100, delayJitter: 50 });
+    await this.dispatchTyping(sequence, { delayMean: 100, delayJitter: 50 });
+    const after = await this.takeScreenshot();
+    const whatChangedOnScreen = await interpretImageDiff(before, after);
+    return { success: true, whatChangedOnScreen } as TypeInFocusedElementOutput;
   }
 
   /**
@@ -189,8 +205,13 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
    * Returns whether typing succeeded, and if not, the reason plus candidates when multiple elements match.
    */
   async typeInElement(selector: string, text: string): Promise<TypeInElementOutput> {
+    const before = await this.takeScreenshot();
     const tabId = this.tabId;
-    if (tabId == null) return { typed: false, reason: 'not found' } as TypeInElementOutput;
+    if (tabId == null) {
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      return { success: false, reason: 'not found', whatChangedOnScreen } as TypeInElementOutput;
+    }
     const [injection] = await chrome.scripting.executeScript({
       target: { tabId },
       func: (sel: string, value: string) => {
@@ -301,14 +322,34 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
       },
       args: [selector, text],
     });
-    const result = (injection as any)?.result as (TypeInElementOutput & { sequence?: any[] }) | undefined;
-    if (!result) return { typed: false, reason: 'not found' } as TypeInElementOutput;
-    if (!result.typed) return result as TypeInElementOutput;
+    const result = (injection as any)?.result as ({ typed?: boolean; reason?: any; foundElements?: ElementBriefing[]; sequence?: any[] }) | undefined;
+    if (!result) {
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      return { success: false, reason: 'not found', whatChangedOnScreen } as TypeInElementOutput;
+    }
+    if (!result.typed) {
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      if (result.reason === 'multiple found') {
+        return { success: false, reason: 'multiple found', foundElements: result.foundElements || [], whatChangedOnScreen } as TypeInElementOutput;
+      }
+      if (result.reason === 'not editable') {
+        return { success: false, reason: 'not editable', whatChangedOnScreen } as TypeInElementOutput;
+      }
+      return { success: false, reason: 'not found', whatChangedOnScreen } as TypeInElementOutput;
+    }
     const seq = result.sequence;
-    if (!Array.isArray(seq)) return { typed: false, reason: 'not found' } as TypeInElementOutput;
+    if (!Array.isArray(seq)) {
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      return { success: false, reason: 'not found', whatChangedOnScreen } as TypeInElementOutput;
+    }
     const ok = await this.dispatchTyping(seq, { delayMean: 100, delayJitter: 50 });
-    if (!ok) return { typed: false, reason: 'not found' } as TypeInElementOutput;
-    return { typed: true } as TypeInElementOutput;
+    const after = await this.takeScreenshot();
+    const whatChangedOnScreen = await interpretImageDiff(before, after);
+    if (!ok) return { success: false, reason: 'not found', whatChangedOnScreen } as TypeInElementOutput;
+    return { success: true, whatChangedOnScreen } as TypeInElementOutput;
   }
 
   /**
@@ -435,22 +476,35 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
    * Returns structured info indicating whether the click happened and if the URL changed after it.
    */
   async clickElementWithText(text: string): Promise<ClickElementWithTextOutput> {
+    const before = await this.takeScreenshot();
     const matches = await this.findElementsWithText(text);
     if (matches.length === 0) {
-      return { clicked: false, reason: 'not found' } as ClickElementWithTextOutput;
+      const after0 = await this.takeScreenshot();
+      const whatChangedOnScreen0 = await interpretImageDiff(before, after0);
+      return { success: false, reason: 'not found', whatChangedOnScreen: whatChangedOnScreen0 } as ClickElementWithTextOutput;
     }
     if (matches.length > 1) {
-      return { clicked: false, reason: 'multiple found', foundElements: matches } as ClickElementWithTextOutput;
+      const after1 = await this.takeScreenshot();
+      const whatChangedOnScreen1 = await interpretImageDiff(before, after1);
+      return { success: false, reason: 'multiple found', foundElements: matches, whatChangedOnScreen: whatChangedOnScreen1 } as ClickElementWithTextOutput;
     }
     const only = matches[0];
 
     const beforeUrl = await this.getCurrentUrl();
     const clicked = await this.clickElement(only.selector);
-    if (!clicked) return { clicked: false, reason: 'not found' } as ClickElementWithTextOutput;
+    if (!clicked.success) {
+      const afterErr = await this.takeScreenshot();
+      const whatChangedOnScreenErr = await interpretImageDiff(before, afterErr);
+      return { success: false, reason: 'not found', whatChangedOnScreen: whatChangedOnScreenErr } as ClickElementWithTextOutput;
+    }
 
     // After click, wait briefly to detect a navigation (URL change) triggered by the action.
     const tabId = this.tabId;
-    if (tabId == null) return { clicked: true, urlChanged: false } as ClickElementWithTextOutput;
+    if (tabId == null) {
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      return { success: true, urlChanged: false, whatChangedOnScreen } as ClickElementWithTextOutput;
+    }
 
     const changedUrl = await (async () => {
       const timeoutMs = 2000;
@@ -465,20 +519,27 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
       return '';
     })();
 
+    const after2 = await this.takeScreenshot();
+    const whatChangedOnScreen = await interpretImageDiff(before, after2);
     if (changedUrl) {
-      return { clicked: true, urlChanged: true, newUrl: changedUrl } as ClickElementWithTextOutput;
+      return { success: true, urlChanged: true, newUrl: changedUrl, whatChangedOnScreen } as ClickElementWithTextOutput;
     }
-    return { clicked: true, urlChanged: false } as ClickElementWithTextOutput;
+    return { success: true, urlChanged: false, whatChangedOnScreen } as ClickElementWithTextOutput;
   }
 
   /**
    * Navigate back in the active tab's history and report if the URL changed.
    */
   async goBack(): Promise<GoBackOutput> {
+    const before = await this.takeScreenshot();
     const tabId = this.tabId;
-    if (tabId == null) return { wentBack: false } as GoBackOutput;
+    if (tabId == null) {
+      const after0 = await this.takeScreenshot();
+      const whatChangedOnScreen0 = await interpretImageDiff(before, after0);
+      return { success: false, whatChangedOnScreen: whatChangedOnScreen0 } as GoBackOutput;
+    }
 
-    const before = await this.getCurrentUrl();
+    const beforeUrl = await this.getCurrentUrl();
     // Use CDP to navigate back in history when possible.
     const target = { tabId } as const;
     let issued = false;
@@ -520,7 +581,7 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
         try {
           const tab = await chrome.tabs.get(tabId);
           const url = tab?.url ?? '';
-          if (url && url !== before) return url;
+          if (url && url !== beforeUrl) return url;
         } catch (_) {
           // ignore transient errors while navigating
         }
@@ -529,16 +590,23 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
       return '';
     })();
 
-    if (changedUrl) return { wentBack: true, newUrl: changedUrl } as GoBackOutput;
-    return { wentBack: false } as GoBackOutput;
+    const after = await this.takeScreenshot();
+    const whatChangedOnScreen = await interpretImageDiff(before, after);
+    if (changedUrl) return { success: true, newUrl: changedUrl, whatChangedOnScreen } as GoBackOutput;
+    return { success: false, whatChangedOnScreen } as GoBackOutput;
   }
 
   /**
    * Scroll the page up or down by a viewport chunk and report edge conditions.
    */
   async scroll(direction: 'up' | 'down'): Promise<ScrollOutput> {
+    const before = await this.takeScreenshot();
     const tabId = this.tabId;
-    if (tabId == null) return { scrolled: false, reason: direction === 'up' ? 'already at the top' : 'already at the bottom' } as ScrollOutput;
+    if (tabId == null) {
+      const after0 = await this.takeScreenshot();
+      const whatChangedOnScreen0 = await interpretImageDiff(before, after0);
+      return { success: false, reason: direction === 'up' ? 'already at the top' : 'already at the bottom', whatChangedOnScreen: whatChangedOnScreen0 } as ScrollOutput;
+    }
 
     // Read current scroll state and viewport center (read operations via injection).
     const [pre] = await chrome.scripting.executeScript({
@@ -555,10 +623,22 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
       },
     });
     const state = (pre as any)?.result as { y: number; maxY: number; vh: number; cx: number; cy: number } | undefined;
-    if (!state) return { scrolled: false, reason: direction === 'up' ? 'already at the top' : 'already at the bottom' } as ScrollOutput;
+    if (!state) {
+      const afterNo = await this.takeScreenshot();
+      const whatChangedOnScreenNo = await interpretImageDiff(before, afterNo);
+      return { success: false, reason: direction === 'up' ? 'already at the top' : 'already at the bottom', whatChangedOnScreen: whatChangedOnScreenNo } as ScrollOutput;
+    }
 
-    if (direction === 'down' && state.y >= state.maxY - 1) return { scrolled: false, reason: 'already at the bottom' } as ScrollOutput;
-    if (direction === 'up' && state.y <= 0) return { scrolled: false, reason: 'already at the top' } as ScrollOutput;
+    if (direction === 'down' && state.y >= state.maxY - 1) {
+      const afterEdge = await this.takeScreenshot();
+      const whatChangedOnScreenEdge = await interpretImageDiff(before, afterEdge);
+      return { success: false, reason: 'already at the bottom', whatChangedOnScreen: whatChangedOnScreenEdge } as ScrollOutput;
+    }
+    if (direction === 'up' && state.y <= 0) {
+      const afterEdge2 = await this.takeScreenshot();
+      const whatChangedOnScreenEdge2 = await interpretImageDiff(before, afterEdge2);
+      return { success: false, reason: 'already at the top', whatChangedOnScreen: whatChangedOnScreenEdge2 } as ScrollOutput;
+    }
 
     const target = { tabId } as const;
     const delta = Math.max(50, Math.round(state.vh * 0.8));
@@ -571,20 +651,31 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
     } finally {
       try { await chrome.debugger.detach(target); } catch (_) { /* ignore */ }
     }
-    return { scrolled: true, direction } as ScrollOutput;
+    const after = await this.takeScreenshot();
+    const whatChangedOnScreen = await interpretImageDiff(before, after);
+    return { success: true, direction, whatChangedOnScreen } as ScrollOutput;
   }
 
   /**
    * Open the provided URL in the bound tab. Normalizes missing scheme to https://
    * and waits briefly for the tab URL to reflect the change.
    */
-  async openUrl(url: string): Promise<boolean> {
+  async openUrl(url: string): Promise<OpenUrlOutput> {
+    const before = await this.takeScreenshot();
     const tabId = this.tabId;
-    if (tabId == null) return false;
+    if (tabId == null) {
+      const after0 = await this.takeScreenshot();
+      const whatChangedOnScreen0 = await interpretImageDiff(before, after0);
+      return { success: false, reason: 'invalid url', whatChangedOnScreen: whatChangedOnScreen0 } as OpenUrlOutput;
+    }
 
     try {
       let targetUrl = String(url || '').trim();
-      if (!targetUrl) return false;
+      if (!targetUrl) {
+        const after1 = await this.takeScreenshot();
+        const whatChangedOnScreen1 = await interpretImageDiff(before, after1);
+        return { success: false, reason: 'invalid url', whatChangedOnScreen: whatChangedOnScreen1 } as OpenUrlOutput;
+      }
       // If no scheme provided, default to https://
       if (!/^https?:\/\//i.test(targetUrl)) {
         targetUrl = `https://${targetUrl}`;
@@ -601,16 +692,25 @@ export class ChromeBrowserAgentProvider implements BrowserAgentProvider {
         try {
           const tab = await chrome.tabs.get(tabId);
           const current = tab?.url ?? '';
-          if (current && current.startsWith(targetUrl)) return true;
+          if (current && current.startsWith(targetUrl)) {
+            const afterOk = await this.takeScreenshot();
+            const whatChangedOnScreenOk = await interpretImageDiff(before, afterOk);
+            return { success: true, newUrl: current, whatChangedOnScreen: whatChangedOnScreenOk } as OpenUrlOutput;
+          }
         } catch (_) {
           // ignore transient tab access errors during navigation
         }
         await new Promise((r) => setTimeout(r, intervalMs));
       }
       // Consider navigation initiated even if we didn't observe final URL in time
-      return true;
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      const tab = await chrome.tabs.get(tabId);
+      return { success: true, newUrl: tab?.url ?? targetUrl, whatChangedOnScreen } as OpenUrlOutput;
     } catch (_) {
-      return false;
+      const after = await this.takeScreenshot();
+      const whatChangedOnScreen = await interpretImageDiff(before, after);
+      return { success: false, reason: 'invalid url', whatChangedOnScreen } as OpenUrlOutput;
     }
   }
 }

@@ -185,7 +185,7 @@ export class BrowserAgent {
     const url = await this.provider.getCurrentUrl();
     const agent = new Agent({
       model: this.config.model,
-      name: 'Browser Agent',
+      name: 'Open Browser Agent',
       instructions: agentPrompt({ url }),
       tools: await this.getTools(),    modelSettings: {
         providerData: {

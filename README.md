@@ -1,4 +1,4 @@
-## Browser Agent: Chrome Extension + OpenAi Agents SDK
+## Open Browser Agent: Chrome Extension + OpenAi Agents SDK
 A Chrome Manifest V3 extension scaffold with:
 
 - Options page to store an API key (chrome.storage.sync) with copy-to-clipboard.
@@ -39,17 +39,22 @@ pnpm run dev
 - Enter a task in the textarea and click "Run". The active tab's page title will be updated.
 - Use the options page (three dots on the extension card → Details → Extension options) to set/copy your OpenAI API key. The organization has to be verified, since this extension uses the gpt-5-mini model.
 
-### Development Notes
+### Tools available
 
-- Uses Manifest V3 with a service worker.
-- Stores settings in `chrome.storage.sync`.
-- Uses `chrome.scripting.executeScript` to modify the active tab.
+- clickElement: Click on the element with the given selector
+- typeInFocusedElement: Type in the focused element
+- typeInElement: Type in the element with the given selector
+- findElementsWithText: Find elements with the given text
+- clickElementWithText: Click on the element with the given text
+- openUrl: Open the given url
+- goBack: Go back to the previous page
+- scroll: Scroll the page
 
-### Files
+## Tech stack
 
-- `manifest.json` – Extension configuration
-- `background.js` – Service worker
-- `popup/` – Popup UI and logic
-- `options/` – Options page for API key
-
-
+- Chrome Manifest V3
+- OpenAi Agents SDK
+- Svelte
+- Tailwind CSS
+- TypeScript
+- Zod

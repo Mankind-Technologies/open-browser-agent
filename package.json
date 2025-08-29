@@ -1,5 +1,5 @@
 {
-  "name": "browser-agent",
+  "name": "open-browser-agent",
   "version": "0.2.0",
   "private": true,
   "description": "Chrome MV3 extension scaffold with TypeScript",

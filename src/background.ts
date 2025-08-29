@@ -1,4 +1,4 @@
-// Background service worker for Browser Agent (TypeScript)
+// Background service worker for Open Browser Agent (TypeScript)
 
 chrome.runtime.onInstalled.addListener(() => {
   // Open the side panel when the action icon is clicked

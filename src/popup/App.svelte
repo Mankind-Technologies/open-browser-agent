@@ -77,6 +77,7 @@
 
     chrome.runtime.onMessage.addListener((message) => {
       if (message?.type === 'agentStep') {
+        console.log(new Date().toISOString(), message);
         const step = message.step as any;
         const t = String(step?.type || '');
         if (t === 'run_item_stream_event') {
@@ -96,7 +97,37 @@
             pushRow(`Invoking tool: ${toolName}`, explaining);
           } else if (name === 'tool_output' || item?.type === 'tool_call_output_item') {
             const toolName = String(raw?.name || '(tool)');
-            pushRow(`Tool finished: ${toolName}`, '');
+            // Try to extract whatChangedOnScreen from the tool output payload, if present
+            let body = '';
+            try {
+              const out = (raw?.output ?? raw?.data ?? raw?.content ?? undefined);
+              const pickChange = (v: any): string | '' => {
+                if (!v) return '';
+                if (typeof v === 'string') {
+                  // Sometimes tools return plain text; accept as-is
+                  return v;
+                }
+                if (typeof v === 'object') {
+                  if (typeof (v as any).whatChangedOnScreen === 'string' && (v as any).whatChangedOnScreen.trim()) {
+                    return (v as any).whatChangedOnScreen.trim();
+                  }
+                  // Some SDKs wrap output under value/result
+                  if (typeof (v as any).value === 'object') return pickChange((v as any).value);
+                  if (Array.isArray((v as any).content)) {
+                    // search within content array for a field
+                    for (const c of (v as any).content) {
+                      const found = pickChange(c);
+                      if (found) return found;
+                    }
+                  }
+                  if (typeof (v as any).text === 'string') return (v as any).text;
+                }
+                return '';
+              };
+              const extracted = pickChange(out);
+              if (extracted) body = extracted;
+            } catch {}
+            pushRow(`Tool finished: ${toolName}`, body);
           } else if (name === 'reasoning_item_created' || item?.type === 'reasoning_item') {
             const parts = Array.isArray(raw?.content) ? raw.content : [];
             const text = parts.map((p: any) => p?.text).filter(Boolean).join('\n');

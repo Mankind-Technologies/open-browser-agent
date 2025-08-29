@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Browser Agent",
+  "name": "Open Browser Agent",
   "description": "MV3 extension scaffold with popup and options to store API key and launch actions.",
   "version": "0.1.0",
   "action": {
-    "default_title": "Browser Agent"
+    "default_title": "Open Browser Agent"
   },
   "side_panel": {
     "default_path": "public/popup/popup.html"

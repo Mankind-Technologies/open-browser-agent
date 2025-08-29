@@ -1,4 +1,4 @@
-// Background service worker for Browser Agent
+// Background service worker for Open Browser Agent
 
 // Maintain simple per-tab running state in chrome.storage.session
 // Key: `running:<tabId>` => boolean
