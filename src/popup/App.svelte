@@ -36,10 +36,14 @@
   }
 
   let seq = 0;
-  function pushRow(label: string, body: string) {
+  function pushRow(label: string, body: string): string {
     const id = `msg-${++seq}`;
     messages = [...messages, { id, label, body }];
     sidebar = [...sidebar, { id, text: label.toUpperCase() }];
+    return id;
+  }
+  function setRowBody(id: string, body: string) {
+    messages = messages.map((m) => (m.id === id ? { ...m, body } : m));
   }
 
   async function loadHistory() {
@@ -70,6 +74,8 @@
   }
 
   onMount(async () => {
+    let thinkingId: string | null = null;
+    let thinkingText = '';
     boundTab = await getBoundTab();
     if (boundTab) running = await getRunning(boundTab.id);
     statusText = running ? 'running' : 'idle';
@@ -80,7 +86,27 @@
         console.log(new Date().toISOString(), message);
         const step = message.step as any;
         const t = String(step?.type || '');
-        if (t === 'run_item_stream_event') {
+        if (t === 'raw_model_stream_event') {
+          const ev = step?.data?.event;
+          const evType = String(ev?.type || '');
+          if (evType === 'response.reasoning_summary_text.delta') {
+            const delta = String(ev?.delta || '');
+            if (delta) {
+              if (!thinkingId) {
+                thinkingText = '';
+                thinkingId = pushRow('Thinking…', '');
+              }
+              thinkingText += delta;
+              setRowBody(thinkingId, thinkingText);
+              tick().then(() => {
+                if (historyContainer) historyContainer.scrollTop = historyContainer.scrollHeight;
+              });
+            }
+          } else if (evType === 'response.reasoning_summary_text.completed') {
+            thinkingId = null;
+            thinkingText = '';
+          }
+        } else if (t === 'run_item_stream_event') {
           const name = String(step?.name || '');
           const item = step?.item || {};
           const raw = item?.rawItem || {};
@@ -146,9 +172,13 @@
       } else if (message?.type === 'agentEnd') {
         statusText = 'idle';
         running = false;
+        thinkingId = null;
+        thinkingText = '';
       } else if (message?.type === 'agentError') {
         statusText = 'error';
         running = false;
+        thinkingId = null;
+        thinkingText = '';
       }
     });
   });
