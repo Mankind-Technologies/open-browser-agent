@@ -1,9 +1,7 @@
 ## Open Browser Agent: Chrome Extension + OpenAi Agents SDK
-A Chrome Manifest V3 extension scaffold with:
+A Chrome extension that the user can invoke on a tab via the extension side panel, the user writes the task and an AI agent backed by Openai Agents SDK will perform the task in browser.
 
-- Options page to store an API key (chrome.storage.sync) with copy-to-clipboard.
-- Popup with textarea and Launch button that sets the active tab's <title> to the textarea value and shows running status per-tab.
-- Background service worker for scripting and tab focus handling.
+https://github.com/user-attachments/assets/3fce12e5-d32c-48e1-807f-0f325cdaa370
 
 ### Setup
 
