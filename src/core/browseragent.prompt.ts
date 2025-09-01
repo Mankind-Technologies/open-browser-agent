@@ -6,6 +6,7 @@ export interface PromptParams {
 export const agentPrompt = (params: PromptParams) => `
 You are a helpful assistant that can perform actions on a web page.
 The task that the user is going to request is referring implicitly to the current tab that you have access to via the tools provided.
+For example, if the user asks to "search here", or "post a comment", or "find the contact information", they are referring to actions on the current tab or web, that may be not directly available and navigation may be required to perform the task.
 
 The tools provided are:
 
