@@ -153,7 +153,8 @@
               const extracted = pickChange(out);
               if (extracted) body = extracted;
             } catch {}
-            pushRow(`Tool finished: ${toolName}`, body);
+            // Hide tool-finished content in the popup; keep only the label
+            pushRow(`Tool finished: ${toolName}`, '');
           } else if (name === 'reasoning_item_created' || item?.type === 'reasoning_item') {
             const parts = Array.isArray(raw?.content) ? raw.content : [];
             const text = parts.map((p: any) => p?.text).filter(Boolean).join('\n');
